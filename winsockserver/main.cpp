@@ -3,6 +3,10 @@
 #include<winsock2.h>
 #include<ws2tcpip.h>
 #include<tchar.h>
+#include<thread>
+#include<algorithm>
+#include<vector>
+#include<functional>
 
 using namespace std;
 
@@ -28,6 +32,41 @@ using namespace std;
 bool initialize(){
     WSADATA data;
     return WSAStartup(MAKEWORD(2,2), &data) == 0;
+}
+
+void IneractWithClient(SOCKET clientSocket, vector<SOCKET>&clients){
+    //send/recv client
+
+    cout<<"client connected"<<endl;
+
+    char buffer[1046];
+
+    while (1){
+     int bytesrecvd = recv(clientSocket, buffer, sizeof(buffer), 0);//receive API
+
+     if(bytesrecvd <=0){
+        cout<<"Client disconnected"<<endl;
+        break;
+     }
+
+    string message(buffer, bytesrecvd);
+    cout<<"message from client: "<<message<<endl;
+
+    for(auto client : clients){
+        if(client != clientSocket){//only send message to new clients
+        send(client, message.c_str(), message.length(), 0);
+        }
+    }
+
+    }
+
+    auto it = find(clients.begin(), clients.end(), clientSocket);//to remove closed socket from vector
+    if(it != clients.end()){
+        clients.erase(it);
+    }
+
+
+    closesocket(clientSocket);
 }
 
 int main(){
@@ -70,20 +109,19 @@ int main(){
     }
 
     cout<<"Server has started listening on port: "<<port<<endl;
+    vector<SOCKET> clients;
 
     //accept
-    SOCKET clientSocket = accept(listenSocket, nullptr, nullptr);
+    while(1){
+        SOCKET clientSocket = accept(listenSocket, nullptr, nullptr);
     if(clientSocket == INVALID_SOCKET){
         cout<<"Accept failed"<<endl;
     }
 
-    char buffer[1046];
-    int bytesrecvd = recv(clientSocket, buffer, sizeof(buffer), 0);//receive API
-
-    string message(buffer, bytesrecvd);
-    cout<<"message from client: "<<message<<endl;
-
-    closesocket(clientSocket);
+    clients.push_back(clientSocket);
+    thread t1(IneractWithClient, clientSocket, std::ref(clients));
+    t1.detach();
+    }
 
     closesocket(listenSocket);
 
